@@ -1,0 +1,29 @@
+[project]
+name = "dl-template"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "torch",
+    "torchvision",
+    "lightning",
+    "tensorboard",
+    "hydra-core",
+    "hydra-colorlog",
+    "hydra-optuna-sweeper",
+    "wandb",
+    "pyrootutils",
+    "python-dotenv",
+    "rich",
+    "dvc",
+    "loguru",
+]
+
+[dependency-groups]
+dev = ["pytest", "pre-commit", "ruff", "ipykernel"]
+
+[tool.ruff]
+line-length = 120
+select = ["E", "F", "B", "I"] # Style, Flake8, Bugbear, Isort
+ignore = ["E501"]             # 忽略行长限制

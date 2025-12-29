@@ -1,0 +1,15 @@
+# .dockerignore
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.git/
+.github/
+.dvc/
+data/
+logs/
+outputs/
+saved_models/
+.env
+.python-version
+uv.lock

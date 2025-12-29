@@ -1,0 +1,13 @@
+# @package _global_
+# configs/experiment/mnist_lr_search.yaml
+# MNIST 学习率搜索实验配置
+
+defaults:
+  - override /data: mnist
+  - override /model: mnist_cnn
+
+tags: ["mnist", "lr_search"]
+
+model:
+  optimizer:
+    lr: 0.01

@@ -1,0 +1,25 @@
+# @package _global_
+# configs/hparams_search/cifar_optuna.yaml
+# CIFAR-10 Optuna 超参数搜索配置
+
+defaults:
+  - override /hydra/sweeper: optuna
+
+hydra:
+  sweeper:
+    sampler:
+      _target_: optuna.samplers.TPESampler
+      seed: ${seed}
+      n_startup_trials: 10
+    direction: maximize
+    study_name: ${task_name}
+    storage: null
+    n_trials: 50
+    n_jobs: 1
+    # 搜索空间
+    params:
+      model.optimizer_hparams.lr: tag(log, interval(1e-4, 1e-1))
+      model.optimizer_hparams.weight_decay: tag(log, interval(1e-6, 1e-3))
+      data.batch_size: choice(64, 128, 256)
+
+optimized_metric: "val/acc"

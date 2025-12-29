@@ -1,0 +1,20 @@
+# @package _global_
+# configs/debug/default.yaml
+# 快速调试配置（fast_dev_run 模式）
+
+trainer:
+  fast_dev_run: True
+  accelerator: cpu
+  devices: 1
+
+data:
+  num_workers: 0
+  batch_size: 4
+
+# 禁用日志和大部分回调（只保留进度条）
+logger: null
+
+callbacks:
+  model_checkpoint: null
+  early_stopping: null
+  learning_rate_monitor: null

@@ -1,0 +1,15 @@
+# configs/model/cifar_googlenet.yaml
+# CIFAR-10 GoogleNet 模型配置
+
+_target_: src.models.cifar_module.CIFARModule
+
+model_name: GoogleNet
+model_hparams:
+  num_classes: 10
+  act_fn_name: relu
+
+optimizer_name: Adam
+optimizer_hparams:
+  lr: 1e-3
+  weight_decay: 1e-4
+

@@ -1,0 +1,7 @@
+# configs/debug.yaml
+# 快速调试入口（等价于 train.yaml + debug/default）
+# @package _global_
+
+defaults:
+  - train
+  - debug: default

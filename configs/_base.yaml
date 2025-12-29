@@ -1,0 +1,127 @@
+# configs/_base.yaml
+# 基础配置（路径、Hydra、日志设置等不常变动的配置）
+# @package _global_
+
+# ============== 路径配置 ==============
+paths:
+  root_dir: ${oc.env:PROJECT_ROOT,${hydra:runtime.cwd}}
+  data_dir: ${oc.env:DATA_DIR,${paths.root_dir}/data}
+  log_dir: ${paths.root_dir}/logs
+  output_dir: ${hydra:runtime.output_dir}
+  work_dir: ${hydra:runtime.cwd}
+
+# ============== Hydra 配置 ==============
+hydra:
+  run:
+    dir: ${paths.log_dir}/runs/${task_name}/${now:%Y-%m-%d_%H-%M-%S}
+
+  sweep:
+    dir: ${paths.log_dir}/multiruns/${task_name}/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${hydra.job.num}
+
+  job:
+    chdir: True
+
+  job_logging:
+    version: 1
+    formatters:
+      simple:
+        format: "[%(asctime)s][%(name)s][%(levelname)s] - %(message)s"
+    handlers:
+      console:
+        class: logging.StreamHandler
+        formatter: simple
+        stream: ext://sys.stdout
+      file:
+        class: logging.FileHandler
+        formatter: simple
+        filename: ${hydra.runtime.output_dir}/${task_name}.log
+    root:
+      level: INFO
+      handlers: [console, file]
+    disable_existing_loggers: False
+
+# ============== 默认 Callbacks ==============
+callbacks:
+  model_checkpoint:
+    _target_: lightning.pytorch.callbacks.ModelCheckpoint
+    dirpath: ${paths.output_dir}/checkpoints
+    filename: "epoch_{epoch:03d}-{val/acc:.4f}"
+    monitor: "val/acc"
+    mode: "max"
+    save_last: True
+    save_top_k: 3
+    verbose: False
+
+  early_stopping:
+    _target_: lightning.pytorch.callbacks.EarlyStopping
+    monitor: "val/acc"
+    patience: 10
+    mode: "max"
+    verbose: False
+
+  rich_progress:
+    _target_: lightning.pytorch.callbacks.RichProgressBar
+
+  learning_rate_monitor:
+    _target_: lightning.pytorch.callbacks.LearningRateMonitor
+    logging_interval: "step"
+
+# ============== 默认 Logger ==============
+logger:
+  csv:
+    _target_: lightning.pytorch.loggers.csv_logs.CSVLogger
+    save_dir: ${paths.output_dir}
+    name: "csv"
+
+  tensorboard:
+    _target_: lightning.pytorch.loggers.tensorboard.TensorBoardLogger
+    save_dir: ${paths.output_dir}
+    name: "tensorboard"
+    default_hp_metric: True
+
+  # wandb:
+  #   _target_: lightning.pytorch.loggers.wandb.WandbLogger
+  #   save_dir: ${paths.output_dir}
+  #   offline: False
+  #   id: null # 续传时指定
+  #   anonymous: null # 可选: "allow", "must", "never"
+  #   project: ${project_name}
+  #   log_model: False # 是否上传模型 checkpoint
+  #   prefix: ""
+  #   group: ""
+  #   tags: ${tags}
+  #   job_type: ""
+
+# ============== 默认 Trainer ==============
+trainer:
+  _target_: lightning.Trainer
+  default_root_dir: ${paths.output_dir}
+
+  # 硬件配置
+  accelerator: auto
+  devices: auto
+  precision: "16-mixed"
+
+  # 训练配置
+  min_epochs: 1
+  max_epochs: 100
+  max_steps: -1
+
+  # 验证配置
+  check_val_every_n_epoch: 1
+  val_check_interval: 1.0
+
+  # 性能优化
+  deterministic: False
+  benchmark: True
+  fast_dev_run: False
+
+  # 梯度配置
+  gradient_clip_val: null
+  gradient_clip_algorithm: "norm"
+  accumulate_grad_batches: 1
+
+  # 其他
+  enable_progress_bar: True
+  enable_model_summary: True

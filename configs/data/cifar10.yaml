@@ -1,0 +1,12 @@
+# configs/data/cifar10.yaml
+# CIFAR-10 数据集配置
+
+_target_: src.data.cifar_datamodule.CIFARDataModule
+
+data_dir: ${paths.data_dir}
+batch_size: 128
+num_workers: 4
+pin_memory: True
+val_ratio: 0.1
+
+

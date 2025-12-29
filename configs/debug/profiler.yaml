@@ -1,0 +1,11 @@
+# @package _global_
+# configs/debug/profiler.yaml
+# 性能分析调试配置
+
+trainer:
+  max_epochs: 1
+  profiler: "simple"  # simple, advanced, pytorch
+
+data:
+  num_workers: 0
+  batch_size: 8

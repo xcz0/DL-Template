@@ -1,0 +1,11 @@
+# configs/data/mnist.yaml
+# MNIST 数据集配置
+
+_target_: src.data.mnist_datamodule.MNISTDataModule
+
+data_dir: ${paths.data_dir}
+batch_size: 64
+num_workers: 4
+pin_memory: True
+
+

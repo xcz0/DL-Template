@@ -1,0 +1,37 @@
+# configs/train.yaml
+# 训练配置入口
+# @package _global_
+
+defaults:
+  - _self_
+  # 基础配置（paths, hydra, callbacks, logger, trainer）
+  - _base
+  # 数据和模型配置（实验中常切换）
+  - data: cifar10
+  - model: cifar_resnet
+  # 可选：experiment 配置（覆盖上述配置）
+  - experiment: null
+  # 可选：调试配置
+  - debug: null
+
+# ============== 全局参数 ==============
+project_name: "DL-Template"
+task_name: "train"
+tags: ["dev"]
+
+seed: 42
+train: True
+test: True
+
+# 断点续训路径（null 表示从头训练）
+ckpt_path: null
+
+# 用于超参搜索的优化指标
+optimized_metric: null
+
+# 是否忽略警告
+ignore_warnings: True
+
+# 是否打印完整配置
+print_config: True
+

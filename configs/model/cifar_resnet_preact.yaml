@@ -1,0 +1,19 @@
+# configs/model/cifar_resnet_preact.yaml
+# CIFAR-10 Pre-Activation ResNet 模型配置
+
+_target_: src.models.cifar_module.CIFARModule
+
+model_name: ResNet
+model_hparams:
+  num_classes: 10
+  c_hidden: [16, 32, 64]
+  num_blocks: [3, 3, 3]
+  act_fn_name: relu
+  block_name: PreActResNetBlock
+
+optimizer_name: SGD
+optimizer_hparams:
+  lr: 0.1
+  momentum: 0.9
+  weight_decay: 1e-4
+

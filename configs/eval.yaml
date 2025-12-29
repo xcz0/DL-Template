@@ -1,0 +1,28 @@
+# configs/eval.yaml
+# 评估配置入口
+# @package _global_
+
+defaults:
+  - _self_
+  - _base
+  - data: cifar10
+  - model: cifar_resnet
+  - experiment: null
+
+# ============== 全局参数 ==============
+project_name: "DL-Template"
+task_name: "eval"
+tags: ["eval"]
+
+seed: 42
+train: False
+test: True
+
+# 必须指定 checkpoint 路径
+ckpt_path: ???
+
+ignore_warnings: True
+print_config: True
+
+# 评估时禁用 callbacks
+callbacks: null

@@ -1,0 +1,23 @@
+# @package _global_
+# configs/debug/limit.yaml
+# 限制步数调试配置
+
+trainer:
+  min_epochs: 1
+  max_epochs: 1
+  max_steps: 100
+  accelerator: cpu
+  devices: 1
+  fast_dev_run: False
+
+data:
+  num_workers: 0
+  batch_size: 8
+
+# 禁用日志和大部分回调（只保留进度条）
+logger: null
+
+callbacks:
+  model_checkpoint: null
+  early_stopping: null
+  learning_rate_monitor: null

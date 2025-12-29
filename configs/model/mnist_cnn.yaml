@@ -1,0 +1,16 @@
+# configs/model/mnist_cnn.yaml
+# MNIST CNN 模型配置
+
+_target_: src.models.mnist_module.MNISTLitModule
+
+net:
+  _target_: src.models.components.simple_cnn.SimpleCNN
+  num_classes: 10
+  in_channels: 1
+
+optimizer:
+  _target_: torch.optim.Adam
+  _partial_: true
+  lr: 1e-3
+  weight_decay: 1e-5
+

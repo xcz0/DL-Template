@@ -1,0 +1,28 @@
+# configs/predict.yaml
+# 预测/推理配置入口
+# @package _global_
+
+defaults:
+  - _self_
+  - _base
+  - model: cifar_resnet
+
+# ============== 全局参数 ==============
+project_name: "DL-Template"
+task_name: "predict"
+tags: ["predict"]
+
+# 必须指定 checkpoint 路径
+ckpt_path: ???
+
+# 预测输入（可以是图片路径或目录）
+input_path: ???
+
+# 预测输出目录
+output_dir: ${paths.output_dir}/predictions
+
+batch_size: 32
+ignore_warnings: True
+
+# 设备配置
+device: "auto"

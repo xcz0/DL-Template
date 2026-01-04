@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "torch",
+    "torch>=2.0",
     "torchvision",
     "lightning",
     "tensorboard",
@@ -18,6 +18,8 @@ dependencies = [
     "rich",
     "dvc",
     "loguru",
+    "jaxtyping",
+    "einops",
 ]
 
 [dependency-groups]
@@ -25,5 +27,12 @@ dev = ["pytest", "pre-commit", "ruff", "ipykernel"]
 
 [tool.ruff]
 line-length = 120
+
+[tool.ruff.lint]
 select = ["E", "F", "B", "I"] # Style, Flake8, Bugbear, Isort
-ignore = ["E501"]             # 忽略行长限制
+ignore = [
+    "E501", # 忽略行长限制
+    "E402", # 模块级导入不在顶部（pyrootutils 需要）
+    "F722", # jaxtyping 语法
+    "F821", # jaxtyping 中的未定义名称
+]

@@ -1,7 +1,6 @@
 """工具函数集合"""
 
 import warnings
-from importlib.util import find_spec
 from typing import Any, Callable
 
 from omegaconf import DictConfig

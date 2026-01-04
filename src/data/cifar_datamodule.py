@@ -1,38 +1,41 @@
+from pathlib import Path
+
 from lightning import LightningDataModule
 from loguru import logger
+from torch.utils.data import DataLoader, random_split
+from torchvision import transforms
+from torchvision.datasets import CIFAR10
 
-DATA_MEANS = [0.49139968, 0.48215841, 0.44653091]
-DATA_STDS = [0.24703223, 0.24348513, 0.26158784]
+DATA_MEANS = (0.49139968, 0.48215841, 0.44653091)
+DATA_STDS = (0.24703223, 0.24348513, 0.26158784)
 
 
 class CIFARDataModule(LightningDataModule):
     def __init__(
         self,
-        data_dir: str,
+        data_dir: str | Path,
         batch_size: int,
         num_workers: int,
         val_ratio: float = 0.1,
         pin_memory: bool = True,
     ):
         super().__init__()
-        self.data_dir = data_dir
+        self.data_dir = Path(data_dir)
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.val_ratio = val_ratio
         self.pin_memory = pin_memory
 
-    def prepare_data(self):
-        # Download CIFAR dataset if not already present
-        from torchvision.datasets import CIFAR10
+        # 将在 setup() 中初始化
+        self.train_set: CIFAR10
+        self.val_set: CIFAR10
+        self.test_set: CIFAR10
 
+    def prepare_data(self) -> None:
         CIFAR10(root=self.data_dir, train=True, download=True)
         CIFAR10(root=self.data_dir, train=False, download=True)
 
-    def setup(self, stage=None):
-        from torch.utils.data import random_split
-        from torchvision import transforms
-        from torchvision.datasets import CIFAR10
-
+    def setup(self, stage: str | None = None) -> None:
         test_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(DATA_MEANS, DATA_STDS)])
         train_transform = transforms.Compose(
             [
@@ -54,9 +57,7 @@ class CIFARDataModule(LightningDataModule):
         if stage == "test" or stage is None:
             self.test_set = CIFAR10(root=self.data_dir, train=False, transform=test_transform)
 
-    def train_dataloader(self):
-        from torch.utils.data import DataLoader
-
+    def train_dataloader(self) -> DataLoader:
         return DataLoader(
             self.train_set,
             batch_size=self.batch_size,
@@ -66,9 +67,7 @@ class CIFARDataModule(LightningDataModule):
             num_workers=self.num_workers,
         )
 
-    def val_dataloader(self):
-        from torch.utils.data import DataLoader
-
+    def val_dataloader(self) -> DataLoader:
         return DataLoader(
             self.val_set,
             batch_size=self.batch_size,
@@ -78,9 +77,7 @@ class CIFARDataModule(LightningDataModule):
             num_workers=self.num_workers,
         )
 
-    def test_dataloader(self):
-        from torch.utils.data import DataLoader
-
+    def test_dataloader(self) -> DataLoader:
         return DataLoader(
             self.test_set,
             batch_size=self.batch_size,
@@ -92,7 +89,6 @@ class CIFARDataModule(LightningDataModule):
 
 
 if __name__ == "__main__":
-    # Example usage
     data_module = CIFARDataModule(val_ratio=0.1, data_dir="./data", batch_size=64, num_workers=8)
     data_module.prepare_data()
     data_module.setup(stage="fit")

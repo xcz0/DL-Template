@@ -1,15 +1,11 @@
 """简单 CNN 网络组件"""
 
-import torch.nn as nn
+from jaxtyping import Float
+from torch import Tensor, nn
 
 
 class SimpleCNN(nn.Module):
-    """简单的 CNN 网络，用于 MNIST 分类。
-
-    Args:
-        num_classes: 类别数量
-        in_channels: 输入通道数
-    """
+    """简单的 CNN 网络，用于 MNIST 分类。"""
 
     def __init__(
         self,
@@ -43,7 +39,7 @@ class SimpleCNN(nn.Module):
             nn.Linear(256, num_classes),
         )
 
-    def forward(self, x):
+    def forward(self, x: Float[Tensor, "B C H W"]) -> Float[Tensor, "B num_classes"]:
         x = self.conv_layers(x)
         x = self.fc_layers(x)
         return x

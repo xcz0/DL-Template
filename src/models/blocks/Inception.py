@@ -1,16 +1,18 @@
+from typing import Callable
+
 import torch
-from torch import nn
+from jaxtyping import Float
+from torch import Tensor, nn
 
 
 class InceptionBlock(nn.Module):
-    def __init__(self, c_in, c_red: dict, c_out: dict, act_fn):
-        """
-        Inputs:
-            c_in - Number of input feature maps from the previous layers
-            c_red - Dictionary with keys "3x3" and "5x5" specifying the output of the dimensionality reducing 1x1 convolutions
-            c_out - Dictionary with keys "1x1", "3x3", "5x5", and "max"
-            act_fn - Activation class constructor (e.g. nn.ReLU)
-        """
+    def __init__(
+        self,
+        c_in: int,
+        c_red: dict[str, int],
+        c_out: dict[str, int],
+        act_fn: Callable[[], nn.Module],
+    ):
         super().__init__()
 
         # 1x1 convolution branch
@@ -46,7 +48,7 @@ class InceptionBlock(nn.Module):
             act_fn(),
         )
 
-    def forward(self, x):
+    def forward(self, x: Float[Tensor, "B C H W"]) -> Float[Tensor, "B C_out H W"]:
         x_1x1 = self.conv_1x1(x)
         x_3x3 = self.conv_3x3(x)
         x_5x5 = self.conv_5x5(x)

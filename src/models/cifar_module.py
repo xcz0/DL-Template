@@ -1,40 +1,49 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from jaxtyping import Float, Int
 from lightning import LightningModule
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
+from torch import Tensor
 
 from .components.DenseNet import DenseNet
 from .components.GoogleNet import GoogleNet
 from .components.ResNet import ResNet
 
-model_dict = {"GoogleNet": GoogleNet, "ResNet": ResNet, "DenseNet": DenseNet}
+MODEL_REGISTRY: dict[str, type[nn.Module]] = {
+    "GoogleNet": GoogleNet,
+    "ResNet": ResNet,
+    "DenseNet": DenseNet,
+}
 
 
-def create_model(model_name, model_hparams):
-    if model_name in model_dict:
-        return model_dict[model_name](**model_hparams)
-    else:
-        raise AssertionError(f'Unknown model name "{model_name}". Available models are: {str(model_dict.keys())}')
+def create_model(model_name: str, model_hparams: dict) -> nn.Module:
+    if model_name not in MODEL_REGISTRY:
+        raise ValueError(f'Unknown model name "{model_name}". Available models are: {list(MODEL_REGISTRY.keys())}')
+    return MODEL_REGISTRY[model_name](**model_hparams)
 
 
 class CIFARModule(LightningModule):
-    def __init__(self, model_name, model_hparams, optimizer_name, optimizer_hparams):
-        """
-        Inputs:
-            model_name - Name of the model/CNN to run. Used for creating the model (see function below)
-            model_hparams - Hyperparameters for the model, as dictionary.
-            optimizer_name - Name of the optimizer to use. Currently supported: Adam, SGD
-            optimizer_hparams - Hyperparameters for the optimizer, as dictionary. This includes learning rate, weight decay, etc.
-        """
+    def __init__(
+        self,
+        model_name: str,
+        model_hparams: dict | DictConfig,
+        optimizer_name: str,
+        optimizer_hparams: dict | DictConfig,
+    ):
         super().__init__()
-        # Hydra may pass DictConfig/ListConfig; store plain containers to keep checkpoints safe to load.
-        model_hparams = OmegaConf.to_container(model_hparams, resolve=True) if model_hparams is not None else {}
+        # Hydra 传入的 DictConfig 转换为普通 dict 以确保 checkpoint 兼容性
+        model_hparams = (
+            OmegaConf.to_container(model_hparams, resolve=True)
+            if isinstance(model_hparams, DictConfig)
+            else dict(model_hparams)
+        )
         optimizer_hparams = (
-            OmegaConf.to_container(optimizer_hparams, resolve=True) if optimizer_hparams is not None else {}
+            OmegaConf.to_container(optimizer_hparams, resolve=True)
+            if isinstance(optimizer_hparams, DictConfig)
+            else dict(optimizer_hparams)
         )
 
-        # Exports the hyperparameters to a YAML file, and create "self.hparams" namespace
         self.save_hyperparameters(
             {
                 "model_name": model_name,
@@ -43,53 +52,58 @@ class CIFARModule(LightningModule):
                 "optimizer_hparams": optimizer_hparams,
             }
         )
-        # Create model
+
         self.model = create_model(model_name, model_hparams)
-        # Create loss module
         self.loss_module = nn.CrossEntropyLoss()
-        # Example input for visualizing the graph in Tensorboard
         self.example_input_array = torch.zeros((1, 3, 32, 32), dtype=torch.float32)
 
-    def forward(self, imgs):
-        # Forward function that is run when visualizing the graph
+    def forward(self, imgs: Float[Tensor, "B 3 H W"]) -> Float[Tensor, "B num_classes"]:
         return self.model(imgs)
 
-    def configure_optimizers(self):
-        # We will support Adam or SGD as optimizers.
-        if self.hparams.optimizer_name == "Adam":
-            # AdamW is Adam with a correct implementation of weight decay (see here for details: https://arxiv.org/pdf/1711.05101.pdf)
-            optimizer = optim.AdamW(self.parameters(), **self.hparams.optimizer_hparams)
-        elif self.hparams.optimizer_name == "SGD":
-            optimizer = optim.SGD(self.parameters(), **self.hparams.optimizer_hparams)
-        else:
-            raise AssertionError(f'Unknown optimizer: "{self.hparams.optimizer_name}"')
+    def configure_optimizers(self) -> tuple[list[optim.Optimizer], list[optim.lr_scheduler.LRScheduler]]:
+        optimizer_name = self.hparams["optimizer_name"]
+        optimizer_hparams = self.hparams["optimizer_hparams"]
 
-        # We will reduce the learning rate by 0.1 after 100 and 150 epochs
+        if optimizer_name == "Adam":
+            optimizer = optim.AdamW(self.parameters(), **optimizer_hparams)
+        elif optimizer_name == "SGD":
+            optimizer = optim.SGD(self.parameters(), **optimizer_hparams)
+        else:
+            raise ValueError(f'Unknown optimizer: "{optimizer_name}". Supported: Adam, SGD')
+
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 150], gamma=0.1)
         return [optimizer], [scheduler]
 
-    def training_step(self, batch, batch_idx):
-        # "batch" is the output of the training data loader.
+    def training_step(
+        self,
+        batch: tuple[Float[Tensor, "B 3 H W"], Int[Tensor, "B"]],
+        batch_idx: int,
+    ) -> Float[Tensor, ""]:
         imgs, labels = batch
         preds = self.model(imgs)
         loss = self.loss_module(preds, labels)
         acc = (preds.argmax(dim=-1) == labels).float().mean()
 
-        # Logs the accuracy per epoch to tensorboard (weighted average over batches)
         self.log("train/acc", acc, on_step=False, on_epoch=True, prog_bar=True)
         self.log("train/loss", loss, on_step=False, on_epoch=True)
-        return loss  # Return tensor to call ".backward" on
+        return loss
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(
+        self,
+        batch: tuple[Float[Tensor, "B 3 H W"], Int[Tensor, "B"]],
+        batch_idx: int,
+    ) -> None:
         imgs, labels = batch
         preds = self.model(imgs).argmax(dim=-1)
         acc = (labels == preds).float().mean()
-        # By default logs it per epoch (weighted average over batches)
         self.log("val/acc", acc, prog_bar=True)
 
-    def test_step(self, batch, batch_idx):
+    def test_step(
+        self,
+        batch: tuple[Float[Tensor, "B 3 H W"], Int[Tensor, "B"]],
+        batch_idx: int,
+    ) -> None:
         imgs, labels = batch
         preds = self.model(imgs).argmax(dim=-1)
         acc = (labels == preds).float().mean()
-        # By default logs it per epoch (weighted average over batches), and returns it afterwards
         self.log("test/acc", acc)

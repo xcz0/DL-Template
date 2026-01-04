@@ -1,25 +1,20 @@
 """MNIST 数据模块"""
 
+from pathlib import Path
+
 from lightning import LightningDataModule
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, Subset, random_split
 from torchvision import transforms
 from torchvision.datasets import MNIST
 
+MNIST_MEAN = (0.1307,)
+MNIST_STD = (0.3081,)
+
 
 class MNISTDataModule(LightningDataModule):
-    """MNIST 数据模块。
-
-    Args:
-        data_dir: 数据存储目录
-        batch_size: 批次大小
-        num_workers: 数据加载进程数
-        pin_memory: 是否将数据固定在内存中
-        val_ratio: 验证集比例
-    """
-
     def __init__(
         self,
-        data_dir: str = "./data",
+        data_dir: str | Path = "./data",
         batch_size: int = 64,
         num_workers: int = 4,
         pin_memory: bool = True,
@@ -28,35 +23,30 @@ class MNISTDataModule(LightningDataModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.data_dir = data_dir
+        self.data_dir = Path(data_dir)
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.pin_memory = pin_memory
         self.val_ratio = val_ratio
 
-        # 数据变换
         self.transform = transforms.Compose(
             [
                 transforms.ToTensor(),
-                transforms.Normalize((0.1307,), (0.3081,)),
+                transforms.Normalize(MNIST_MEAN, MNIST_STD),
             ]
         )
 
-        self.train_set = None
-        self.val_set = None
-        self.test_set = None
+        # 将在 setup() 中初始化
+        self.train_set: Subset[MNIST]
+        self.val_set: Subset[MNIST]
+        self.test_set: MNIST
 
     def prepare_data(self):
         """下载数据集（仅在单进程中调用）"""
         MNIST(root=self.data_dir, train=True, download=True)
         MNIST(root=self.data_dir, train=False, download=True)
 
-    def setup(self, stage: str = None):
-        """设置数据集（每个进程都会调用）
-
-        Args:
-            stage: 训练阶段 (fit, test, predict)
-        """
+    def setup(self, stage: str | None = None) -> None:
         if stage == "fit" or stage is None:
             mnist_full = MNIST(
                 root=self.data_dir,

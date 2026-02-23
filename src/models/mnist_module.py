@@ -14,7 +14,9 @@ class MNISTLitModule(LightningModule):
         super().__init__()
         self.save_hyperparameters(logger=False)
         self.net = net
-        self.accuracy = Accuracy(task="multiclass", num_classes=10)
+        self.train_acc = Accuracy(task="multiclass", num_classes=10)
+        self.val_acc = Accuracy(task="multiclass", num_classes=10)
+        self.test_acc = Accuracy(task="multiclass", num_classes=10)
 
     def forward(self, x: Float[Tensor, "B 1 H W"]) -> Float[Tensor, "B num_classes"]:
         return self.net(x)
@@ -26,7 +28,8 @@ class MNISTLitModule(LightningModule):
     ) -> Float[Tensor, ""]:
         loss, preds, targets = self._model_step(batch)
         self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("train/acc", self.accuracy(preds, targets), on_step=False, on_epoch=True, prog_bar=True)
+        self.train_acc(preds, targets)
+        self.log("train/acc", self.train_acc, on_step=False, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(
@@ -35,8 +38,19 @@ class MNISTLitModule(LightningModule):
         batch_idx: int,
     ) -> None:
         loss, preds, targets = self._model_step(batch)
-        self.log("val/loss", loss, prog_bar=True)
-        self.log("val/acc", self.accuracy(preds, targets), prog_bar=True)
+        self.val_acc(preds, targets)
+        self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val/acc", self.val_acc, on_step=False, on_epoch=True, prog_bar=True)
+
+    def test_step(
+        self,
+        batch: tuple[Float[Tensor, "B 1 H W"], Int[Tensor, "B"]],
+        batch_idx: int,
+    ) -> None:
+        loss, preds, targets = self._model_step(batch)
+        self.test_acc(preds, targets)
+        self.log("test/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("test/acc", self.test_acc, on_step=False, on_epoch=True, prog_bar=True)
 
     def _model_step(
         self,

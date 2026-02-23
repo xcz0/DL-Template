@@ -155,13 +155,15 @@ def predict(cfg: DictConfig) -> list[dict[str, Any]]:
         for i in range(0, len(image_paths), batch_size):
             batch_paths = image_paths[i : i + batch_size]
             batch_images = []
+            valid_paths = []
 
             for img_path in batch_paths:
                 try:
                     img = load_image(img_path, transform)
                     batch_images.append(img)
+                    valid_paths.append(img_path)
                 except Exception as e:
-                    logger.warning(f"Failed to load image {img_path}: {e}")
+                    logger.warning(f"Failed to load image {img_path}: {e}. 该图片被跳过。")
                     continue
 
             if not batch_images:
@@ -176,7 +178,7 @@ def predict(cfg: DictConfig) -> list[dict[str, Any]]:
             preds = torch.argmax(probs, dim=-1)
 
             # 收集结果
-            for j, img_path in enumerate(batch_paths[: len(batch_images)]):
+            for j, img_path in enumerate(valid_paths):
                 pred_idx = int(preds[j].item())
                 pred_prob = float(probs[j, pred_idx].item())
                 result: dict[str, Any] = {

@@ -38,6 +38,15 @@ class MNISTLitModule(LightningModule):
         self.log("val/loss", loss, prog_bar=True)
         self.log("val/acc", self.accuracy(preds, targets), prog_bar=True)
 
+    def test_step(
+        self,
+        batch: tuple[Float[Tensor, "B 1 H W"], Int[Tensor, "B"]],
+        batch_idx: int,
+    ) -> None:
+        loss, preds, targets = self._model_step(batch)
+        self.log("test/loss", loss, prog_bar=True)
+        self.log("test/acc", self.accuracy(preds, targets), prog_bar=True)
+
     def _model_step(
         self,
         batch: tuple[Float[Tensor, "B 1 H W"], Int[Tensor, "B"]],

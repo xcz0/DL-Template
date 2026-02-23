@@ -70,13 +70,15 @@ def train(cfg: DictConfig) -> dict:
         log_hyperparameters(cfg, model, trainer)
 
     # 7. 训练
+    fit_metrics_snapshot: dict = {}
     if cfg.get("train"):
         logger.info("Starting training...")
         ckpt_path = cfg.get("ckpt_path")
         trainer.fit(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
+        fit_metrics_snapshot = dict(trainer.callback_metrics)
 
     # 8. 获取最佳模型路径
-    train_metrics = trainer.callback_metrics
+    train_metrics = fit_metrics_snapshot
     best_ckpt_path = None
     if trainer.checkpoint_callback is not None:
         best_ckpt_path = trainer.checkpoint_callback.best_model_path
@@ -84,6 +86,7 @@ def train(cfg: DictConfig) -> dict:
             logger.info(f"Best checkpoint saved at: {best_ckpt_path}")
 
     # 9. 测试
+    test_metrics_snapshot: dict = {}
     if cfg.get("test"):
         logger.info("Starting testing...")
         # 优先使用最佳模型，否则使用当前权重
@@ -93,10 +96,16 @@ def train(cfg: DictConfig) -> dict:
         else:
             logger.warning("No checkpoint found, using current model weights for testing.")
         trainer.test(model=model, datamodule=datamodule, ckpt_path=test_ckpt_path)
+        test_metrics_snapshot = dict(trainer.callback_metrics)
 
     # 10. 合并所有 metrics
-    test_metrics = trainer.callback_metrics
-    all_metrics = {**train_metrics, **test_metrics}
+    all_metrics = {
+        **{f"fit/{k}": v for k, v in train_metrics.items()},
+        **{f"test/{k}": v for k, v in test_metrics_snapshot.items()},
+    }
+
+    # 保留训练阶段原始 key，避免影响现有 optimized_metric 配置
+    all_metrics.update(train_metrics)
 
     return all_metrics
 
@@ -118,7 +127,13 @@ def main(cfg: DictConfig) -> float | None:
     metrics = train(cfg)
 
     # 获取优化指标（用于 Optuna 等超参数搜索）
-    metric_value = get_metric_value(metrics, cfg.get("optimized_metric"))
+    optimized_metric = cfg.get("optimized_metric")
+    fit_metric_name = f"fit/{optimized_metric}" if optimized_metric else None
+
+    if fit_metric_name and fit_metric_name in metrics:
+        metric_value = get_metric_value(metrics, fit_metric_name)
+    else:
+        metric_value = get_metric_value(metrics, optimized_metric)
 
     return metric_value
 

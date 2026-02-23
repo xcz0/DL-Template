@@ -63,14 +63,15 @@ class CIFARModule(LightningModule):
     def configure_optimizers(self) -> tuple[list[optim.Optimizer], list[optim.lr_scheduler.LRScheduler]]:
         optimizer_name = self.hparams["optimizer_name"]
         optimizer_hparams = self.hparams["optimizer_hparams"]
+        optimizer_registry: dict[str, type[optim.Optimizer]] = {
+            "Adam": optim.AdamW,
+            "SGD": optim.SGD,
+        }
 
-        if optimizer_name == "Adam":
-            optimizer = optim.AdamW(self.parameters(), **optimizer_hparams)
-        elif optimizer_name == "SGD":
-            optimizer = optim.SGD(self.parameters(), **optimizer_hparams)
-        else:
-            raise ValueError(f'Unknown optimizer: "{optimizer_name}". Supported: Adam, SGD')
+        if optimizer_name not in optimizer_registry:
+            raise ValueError(f'Unknown optimizer: "{optimizer_name}". Supported: {list(optimizer_registry)}')
 
+        optimizer = optimizer_registry[optimizer_name](self.parameters(), **optimizer_hparams)
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[100, 150], gamma=0.1)
         return [optimizer], [scheduler]
 

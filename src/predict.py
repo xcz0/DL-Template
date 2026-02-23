@@ -1,5 +1,6 @@
 """预测/推理入口脚本"""
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -18,59 +19,8 @@ from torchvision import transforms  # noqa: E402
 
 from src.utils import extras, task_wrapper  # noqa: E402
 
-
-def get_device(device_cfg: str) -> torch.device:
-    """根据配置获取设备。
-
-    Args:
-        device_cfg: 设备配置字符串
-
-    Returns:
-        torch.device 对象
-    """
-    if device_cfg == "auto":
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    return torch.device(device_cfg)
-
-
-def load_image(image_path: str, transform: transforms.Compose) -> torch.Tensor:
-    """加载并预处理图片。
-
-    Args:
-        image_path: 图片路径
-        transform: 图片预处理变换
-
-    Returns:
-        预处理后的图片张量
-    """
-    image = Image.open(image_path).convert("RGB")
-    tensor: torch.Tensor = transform(image)
-    return tensor
-
-
-def get_image_paths(input_path: str) -> list[str]:
-    """获取输入路径下的所有图片路径。
-
-    Args:
-        input_path: 输入路径（可以是文件或目录）
-
-    Returns:
-        图片路径列表
-    """
-    path = Path(input_path)
-    image_extensions = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"}
-
-    if path.is_file():
-        return [str(path)]
-    elif path.is_dir():
-        image_paths: list[Path] = []
-        for ext in image_extensions:
-            image_paths.extend(path.glob(f"*{ext}"))
-            image_paths.extend(path.glob(f"*{ext.upper()}"))
-        return [str(p) for p in sorted(image_paths)]
-    else:
-        raise ValueError(f"Input path does not exist: {path}")
-
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"}
+CIFAR_MODEL_NAMES = {"GoogleNet", "ResNet", "DenseNet"}
 
 # CIFAR-10 类别标签
 CIFAR10_CLASSES = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
@@ -79,104 +29,103 @@ CIFAR10_CLASSES = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog
 MNIST_CLASSES = [str(i) for i in range(10)]
 
 
-@task_wrapper
-def predict(cfg: DictConfig) -> list[dict[str, Any]]:
-    """预测流程。
+def get_device(device_cfg: str) -> torch.device:
+    """根据配置获取设备。"""
+    if device_cfg == "auto":
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    return torch.device(device_cfg)
 
-    Args:
-        cfg: Hydra 配置对象
 
-    Returns:
-        预测结果列表
-    """
-    assert cfg.ckpt_path, "Checkpoint path (ckpt_path) must be specified for prediction!"
-    assert cfg.input_path, "Input path (input_path) must be specified for prediction!"
+def load_image(image_path: str, transform: transforms.Compose) -> torch.Tensor:
+    """加载并预处理图片。"""
+    with Image.open(image_path) as image:
+        return transform(image.convert("RGB"))
 
-    # 1. 获取设备
-    device = get_device(cfg.device)
-    logger.info(f"Using device: {device}")
 
-    # 2. 加载模型
-    logger.info(f"Loading model from checkpoint: {cfg.ckpt_path}")
-    model = instantiate(cfg.model)
+def get_image_paths(input_path: str) -> list[str]:
+    """获取输入路径下的所有图片路径。"""
+    path = Path(input_path)
 
-    # 从 checkpoint 加载权重
-    checkpoint = torch.load(cfg.ckpt_path, map_location=device, weights_only=False)
-    if "state_dict" in checkpoint:
-        model.load_state_dict(checkpoint["state_dict"])
-    else:
-        model.load_state_dict(checkpoint)
+    if path.is_file():
+        if path.suffix.lower() not in IMAGE_EXTENSIONS:
+            raise ValueError(f"Unsupported image file extension: {path.suffix}")
+        return [str(path)]
 
-    model = model.to(device)
-    model.eval()
-    if hasattr(model, "freeze"):
-        model.freeze()
+    if path.is_dir():
+        return [str(p) for p in sorted(p for p in path.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS)]
 
-    # 3. 定义预处理（根据模型类型选择）
-    # 判断是 CIFAR 还是 MNIST 模型
-    model_name = cfg.model.get("model_name", "")
-    if model_name in ["GoogleNet", "ResNet", "DenseNet"]:
-        # CIFAR-10 预处理
-        data_means = [0.49139968, 0.48215841, 0.44653091]
-        data_stds = [0.24703223, 0.24348513, 0.26158784]
+    raise ValueError(f"Input path does not exist: {path}")
+
+
+def _get_predict_meta(model_name: str) -> tuple[transforms.Compose, list[str]]:
+    if model_name in CIFAR_MODEL_NAMES:
         transform = transforms.Compose(
             [
                 transforms.Resize((32, 32)),
                 transforms.ToTensor(),
-                transforms.Normalize(data_means, data_stds),
+                transforms.Normalize((0.49139968, 0.48215841, 0.44653091), (0.24703223, 0.24348513, 0.26158784)),
             ]
         )
-        class_names = CIFAR10_CLASSES
-    else:
-        # MNIST 预处理
-        transform = transforms.Compose(
-            [
-                transforms.Grayscale(num_output_channels=1),
-                transforms.Resize((28, 28)),
-                transforms.ToTensor(),
-                transforms.Normalize((0.1307,), (0.3081,)),
-            ]
-        )
-        class_names = MNIST_CLASSES
+        return transform, CIFAR10_CLASSES
 
-    # 4. 获取图片路径
+    transform = transforms.Compose(
+        [
+            transforms.Grayscale(num_output_channels=1),
+            transforms.Resize((28, 28)),
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,)),
+        ]
+    )
+    return transform, MNIST_CLASSES
+
+
+@task_wrapper
+def predict(cfg: DictConfig) -> list[dict[str, Any]]:
+    """预测流程。"""
+    assert cfg.ckpt_path, "Checkpoint path (ckpt_path) must be specified for prediction!"
+    assert cfg.input_path, "Input path (input_path) must be specified for prediction!"
+
+    device = get_device(cfg.device)
+    logger.info(f"Using device: {device}")
+
+    logger.info(f"Loading model from checkpoint: {cfg.ckpt_path}")
+    model = instantiate(cfg.model)
+
+    checkpoint = torch.load(cfg.ckpt_path, map_location=device, weights_only=True)
+    model.load_state_dict(checkpoint["state_dict"])
+    model = model.to(device).eval()
+
+    transform, class_names = _get_predict_meta(cfg.model.get("model_name", ""))
+
     image_paths = get_image_paths(cfg.input_path)
     logger.info(f"Found {len(image_paths)} images to predict")
 
-    # 5. 创建输出目录
     output_dir = Path(cfg.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 6. 批量预测
     results: list[dict[str, Any]] = []
-    batch_size = cfg.batch_size
 
-    with torch.no_grad():
-        for i in range(0, len(image_paths), batch_size):
-            batch_paths = image_paths[i : i + batch_size]
-            batch_images = []
+    with torch.inference_mode():
+        for i in range(0, len(image_paths), cfg.batch_size):
+            batch_paths = image_paths[i : i + cfg.batch_size]
+            valid_paths: list[str] = []
+            batch_images: list[torch.Tensor] = []
 
             for img_path in batch_paths:
                 try:
-                    img = load_image(img_path, transform)
-                    batch_images.append(img)
+                    batch_images.append(load_image(img_path, transform))
+                    valid_paths.append(img_path)
                 except Exception as e:
                     logger.warning(f"Failed to load image {img_path}: {e}")
-                    continue
 
             if not batch_images:
                 continue
 
-            # 堆叠成批次
-            batch_tensor = torch.stack(batch_images).to(device)
-
-            # 前向传播
-            logits = model(batch_tensor)
+            logits = model(torch.stack(batch_images).to(device))
             probs = torch.softmax(logits, dim=-1)
-            preds = torch.argmax(probs, dim=-1)
+            preds = probs.argmax(dim=-1)
 
-            # 收集结果
-            for j, img_path in enumerate(batch_paths[: len(batch_images)]):
+            for j, img_path in enumerate(valid_paths):
                 pred_idx = int(preds[j].item())
                 pred_prob = float(probs[j, pred_idx].item())
                 result: dict[str, Any] = {
@@ -189,12 +138,9 @@ def predict(cfg: DictConfig) -> list[dict[str, Any]]:
                 results.append(result)
                 logger.info(f"{Path(img_path).name}: {class_names[pred_idx]} (confidence: {pred_prob:.4f})")
 
-    # 7. 保存结果
-    import json
-
     results_file = output_dir / "predictions.json"
-    with open(results_file, "w") as f:
-        json.dump(results, f, indent=2)
+    with results_file.open("w", encoding="utf-8") as f:
+        json.dump(results, f, indent=2, ensure_ascii=False)
     logger.info(f"Predictions saved to: {results_file}")
 
     return results
@@ -202,21 +148,9 @@ def predict(cfg: DictConfig) -> list[dict[str, Any]]:
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="predict.yaml")
 def main(cfg: DictConfig) -> list[dict[str, Any]]:
-    """主入口函数。
-
-    Args:
-        cfg: Hydra 配置对象
-
-    Returns:
-        预测结果列表
-    """
-    # 应用额外配置
+    """主入口函数。"""
     extras(cfg)
-
-    # 执行预测
-    results = predict(cfg)
-
-    return results
+    return predict(cfg)
 
 
 if __name__ == "__main__":

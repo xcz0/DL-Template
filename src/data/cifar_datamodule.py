@@ -1,8 +1,9 @@
 from pathlib import Path
 
+import torch
 from lightning import LightningDataModule
 from loguru import logger
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, Subset
 from torchvision import transforms
 from torchvision.datasets import CIFAR10
 
@@ -11,6 +12,11 @@ DATA_STDS = (0.24703223, 0.24348513, 0.26158784)
 
 
 class CIFARDataModule(LightningDataModule):
+    """CIFAR-10 datamodule.
+
+    训练集与验证集共享同一份原始样本池，但应用不同 transform，且索引集合互斥。
+    """
+
     def __init__(
         self,
         data_dir: str | Path,
@@ -25,10 +31,11 @@ class CIFARDataModule(LightningDataModule):
         self.num_workers = num_workers
         self.val_ratio = val_ratio
         self.pin_memory = pin_memory
+        self.split_seed = 42
 
         # 将在 setup() 中初始化
-        self.train_set: CIFAR10
-        self.val_set: CIFAR10
+        self.train_set: Subset[CIFAR10]
+        self.val_set: Subset[CIFAR10]
         self.test_set: CIFAR10
 
     def prepare_data(self) -> None:
@@ -49,10 +56,17 @@ class CIFARDataModule(LightningDataModule):
         if stage == "fit" or stage is None:
             train_dataset = CIFAR10(root=self.data_dir, train=True, transform=train_transform, download=True)
             val_dataset = CIFAR10(root=self.data_dir, train=True, transform=test_transform, download=True)
-            val_size = int(self.val_ratio * len(train_dataset))
-            train_size = len(train_dataset) - val_size
-            self.train_set, _ = random_split(train_dataset, [train_size, val_size])
-            _, self.val_set = random_split(val_dataset, [train_size, val_size])
+
+            dataset_size = len(train_dataset)
+            val_size = int(self.val_ratio * dataset_size)
+
+            split_generator = torch.Generator().manual_seed(self.split_seed)
+            permuted_indices = torch.randperm(dataset_size, generator=split_generator).tolist()
+            val_indices = permuted_indices[:val_size]
+            train_indices = permuted_indices[val_size:]
+
+            self.train_set = Subset(train_dataset, train_indices)
+            self.val_set = Subset(val_dataset, val_indices)
 
         if stage == "test" or stage is None:
             self.test_set = CIFAR10(root=self.data_dir, train=False, transform=test_transform)

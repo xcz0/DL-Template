@@ -82,12 +82,9 @@ def _find_ckpt(run_dir: Path) -> Path | None:
 
 
 def _count_params_from_ckpt(ckpt_path: Path, model_target: str | None) -> int | None:
-    # Avoid unpickling arbitrary objects: we rely on weights_only=True.
-    try:
-        ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
-    except TypeError:
-        # Older torch versions may not support weights_only
-        ckpt = torch.load(ckpt_path, map_location="cpu")
+    # Project baseline is torch>=2.0, so `weights_only=True` is required and no legacy fallback is kept.
+    # If needed for faster local checkpoint scans, consider evaluating `mmap=True` when filesystems/runtime support it.
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
 
     hparams = ckpt.get("hyper_parameters") or {}
 

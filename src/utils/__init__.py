@@ -119,17 +119,9 @@ def instantiate_callbacks(callbacks_cfg: DictConfig) -> list:
     Returns:
         回调对象列表
     """
-    from hydra.utils import instantiate
     from lightning.pytorch.callbacks import Callback
 
-    callbacks: list[Callback] = []
-    if not callbacks_cfg:
-        return callbacks
-
-    for _, cb_conf in callbacks_cfg.items():
-        if cb_conf is not None and "_target_" in cb_conf:
-            callbacks.append(instantiate(cb_conf))
-
+    callbacks: list[Callback] = _instantiate_config_group(callbacks_cfg)
     return callbacks
 
 
@@ -142,18 +134,25 @@ def instantiate_loggers(logger_cfg: DictConfig) -> list:
     Returns:
         日志记录器对象列表
     """
-    from hydra.utils import instantiate
     from lightning.pytorch.loggers import Logger
 
-    loggers: list[Logger] = []
-    if not logger_cfg:
-        return loggers
-
-    for _, lg_conf in logger_cfg.items():
-        if lg_conf is not None and "_target_" in lg_conf:
-            loggers.append(instantiate(lg_conf))
-
+    loggers: list[Logger] = _instantiate_config_group(logger_cfg)
     return loggers
+
+
+def _instantiate_config_group(group_cfg: DictConfig | None) -> list:
+    """从配置组实例化对象列表。"""
+    from hydra.utils import instantiate
+
+    instances: list[Any] = []
+    if not group_cfg:
+        return instances
+
+    for _, item_cfg in group_cfg.items():
+        if item_cfg is not None and "_target_" in item_cfg:
+            instances.append(instantiate(item_cfg))
+
+    return instances
 
 
 def log_hyperparameters(

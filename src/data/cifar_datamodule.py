@@ -1,8 +1,9 @@
 from pathlib import Path
 
+import torch
 from lightning import LightningDataModule
 from loguru import logger
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, Subset
 from torchvision import transforms
 from torchvision.datasets import CIFAR10
 
@@ -17,6 +18,7 @@ class CIFARDataModule(LightningDataModule):
         batch_size: int,
         num_workers: int,
         val_ratio: float = 0.1,
+        split_seed: int = 42,
         pin_memory: bool = True,
     ):
         super().__init__()
@@ -24,6 +26,7 @@ class CIFARDataModule(LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.val_ratio = val_ratio
+        self.split_seed = split_seed
         self.pin_memory = pin_memory
 
         # 将在 setup() 中初始化
@@ -49,10 +52,23 @@ class CIFARDataModule(LightningDataModule):
         if stage == "fit" or stage is None:
             train_dataset = CIFAR10(root=self.data_dir, train=True, transform=train_transform, download=True)
             val_dataset = CIFAR10(root=self.data_dir, train=True, transform=test_transform, download=True)
-            val_size = int(self.val_ratio * len(train_dataset))
-            train_size = len(train_dataset) - val_size
-            self.train_set, _ = random_split(train_dataset, [train_size, val_size])
-            _, self.val_set = random_split(val_dataset, [train_size, val_size])
+
+            dataset_size = len(train_dataset)
+            val_size = int(self.val_ratio * dataset_size)
+            train_size = dataset_size - val_size
+
+            gen = torch.Generator().manual_seed(self.split_seed)
+            indices = torch.randperm(dataset_size, generator=gen).tolist()
+            train_indices = indices[:train_size]
+            val_indices = indices[train_size:]
+
+            if len(set(train_indices).intersection(val_indices)) != 0:
+                raise RuntimeError("Train/val indices overlap.")
+            if len(train_indices) + len(val_indices) != dataset_size:
+                raise RuntimeError("Train/val indices do not cover the full dataset.")
+
+            self.train_set = Subset(train_dataset, train_indices)
+            self.val_set = Subset(val_dataset, val_indices)
 
         if stage == "test" or stage is None:
             self.test_set = CIFAR10(root=self.data_dir, train=False, transform=test_transform)

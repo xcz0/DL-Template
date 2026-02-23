@@ -75,8 +75,10 @@ def train(cfg: DictConfig) -> dict:
         ckpt_path = cfg.get("ckpt_path")
         trainer.fit(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
 
-    # 8. 获取最佳模型路径
-    train_metrics = trainer.callback_metrics
+    # 8. 获取训练阶段指标快照与最佳模型路径
+    # 注意：trainer.callback_metrics 是可变映射，会在后续 test 阶段被更新。
+    # 这里立刻复制快照，确保 train_metrics 语义始终代表“训练结束时”的指标。
+    train_metrics = dict(trainer.callback_metrics)
     best_ckpt_path = None
     if trainer.checkpoint_callback is not None:
         best_ckpt_path = trainer.checkpoint_callback.best_model_path
@@ -94,11 +96,21 @@ def train(cfg: DictConfig) -> dict:
             logger.warning("No checkpoint found, using current model weights for testing.")
         trainer.test(model=model, datamodule=datamodule, ckpt_path=test_ckpt_path)
 
-    # 10. 合并所有 metrics
-    test_metrics = trainer.callback_metrics
-    all_metrics = {**train_metrics, **test_metrics}
+    # 10. 获取测试阶段指标快照并合并
+    # 同样复制快照，避免后续访问时读到被覆盖/变更后的引用。
+    test_metrics = dict(trainer.callback_metrics)
 
-    return all_metrics
+    # 合并策略：
+    # 1) 默认保留训练阶段指标；
+    # 2) 若测试阶段出现同名键，测试值覆盖原键；
+    # 3) 被覆盖的训练值会保留为 train_snapshot/<metric>，避免语义丢失。
+    metrics = dict(train_metrics)
+    for key, value in test_metrics.items():
+        if key in metrics and metrics[key] != value:
+            metrics[f"train_snapshot/{key}"] = metrics[key]
+        metrics[key] = value
+
+    return metrics
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="train.yaml")
